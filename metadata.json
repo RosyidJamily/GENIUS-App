@@ -1,0 +1,6 @@
+{
+  "name": "GENIUS - Monitoring Sekolah",
+  "description": "Aplikasi monitoring dan administrasi kegiatan sekolah SDN Tamansari",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

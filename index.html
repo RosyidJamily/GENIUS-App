@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>GENIUS - Solusi Jenius Monitoring Terpadu Sekolah | SDN Tamansari</title>
+    <meta name="description" content="GENIUS APP - Solusi Jenius Monitoring Terpadu Sekolah SDN Tamansari. Monitoring Kepala Sekolah, Jurnal Guru, Pembiasaan, GENIUS Class, Kombel, Administrasi, dan Seven Habits." />
+    <meta property="og:title" content="GENIUS - Solusi Jenius Monitoring Terpadu Sekolah | SDN Tamansari" />
+    <meta property="og:description" content="Solusi Jenius Monitoring Terpadu Sekolah SDN Tamansari. Jurnal Mengajar, Pembiasaan, GENIUS Class, Kombel, Supervisi, dan 7 Kebiasaan Siswa." />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+      /* 2D Modern Opener Animation Styles */
+      #genius-opener {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #F8FAFC;
+        background-image: 
+          radial-gradient(#E2E8F0 1.5px, transparent 1.5px),
+          radial-gradient(#E2E8F0 1.5px, #F8FAFC 1.5px);
+        background-size: 32px 32px;
+        background-position: 0 0, 16px 16px;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        color: #1E293B;
+        transition: opacity 0.45s ease-out, transform 0.45s ease-out, visibility 0.45s;
+        overflow: hidden;
+      }
+
+      #genius-opener.opener-hidden {
+        opacity: 0;
+        transform: scale(1.03);
+        pointer-events: none;
+        visibility: hidden;
+      }
+
+      /* 2D Background Decorative Elements */
+      .opener-bg-shape {
+        position: absolute;
+        border-radius: 9999px;
+        pointer-events: none;
+        opacity: 0.7;
+        filter: blur(40px);
+      }
+      .opener-bg-shape-1 {
+        width: 320px;
+        height: 320px;
+        background: rgba(99, 102, 241, 0.15);
+        top: -40px;
+        left: -40px;
+      }
+      .opener-bg-shape-2 {
+        width: 280px;
+        height: 280px;
+        background: rgba(14, 165, 233, 0.12);
+        bottom: -30px;
+        right: -30px;
+      }
+
+      /* 2D Container Card */
+      .opener-card {
+        position: relative;
+        z-index: 10;
+        width: 90%;
+        max-width: 440px;
+        padding: 32px 28px;
+        background: #FFFFFF;
+        border: 2px solid #E2E8F0;
+        border-radius: 28px;
+        box-shadow: 0 20px 40px -15px rgba(30, 41, 59, 0.08), 0 0 0 1px rgba(226, 232, 240, 0.6);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        animation: cardPopIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes cardPopIn {
+        0% {
+          opacity: 0;
+          transform: translateY(24px) scale(0.96);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      /* 2D Emblem & Icon */
+      .opener-icon-wrap {
+        position: relative;
+        width: 88px;
+        height: 88px;
+        margin-bottom: 20px;
+      }
+
+      .opener-icon-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+        transform: rotate(-4deg);
+        box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.35);
+        animation: ringWiggle 3s ease-in-out infinite alternate;
+      }
+
+      @keyframes ringWiggle {
+        0% { transform: rotate(-4deg); }
+        100% { transform: rotate(4deg); }
+      }
+
+      .opener-icon-inner {
+        position: absolute;
+        inset: 3px;
+        border-radius: 22px;
+        background: #FFFFFF;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #EEF2F6;
+      }
+
+      /* Brand typography */
+      .opener-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        background: #EEF2FF;
+        border: 1px solid #C7D2FE;
+        color: #4338CA;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+
+      .opener-badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: #4F46E5;
+        animation: dotPulse 1.5s infinite;
+      }
+
+      @keyframes dotPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(1.4); }
+      }
+
+      .opener-title {
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1.2;
+        color: #0F172A;
+        letter-spacing: -0.02em;
+        margin: 0 0 6px 0;
+      }
+
+      .opener-title span {
+        background: linear-gradient(135deg, #4F46E5 0%, #0284C7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .opener-subtitle {
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748B;
+        margin: 0 0 24px 0;
+        line-height: 1.5;
+        text-transform: lowercase;
+      }
+
+      /* 2D Flat Progress Bar */
+      .opener-progress-box {
+        width: 100%;
+        background: #F1F5F9;
+        border: 1.5px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        box-sizing: border-box;
+      }
+
+      .opener-bar-track {
+        width: 100%;
+        height: 8px;
+        background: #E2E8F0;
+        border-radius: 9999px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .opener-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #4F46E5 0%, #06B6D4 100%);
+        border-radius: 9999px;
+        transition: width 0.25s ease-out;
+      }
+
+      .opener-status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+        font-size: 11px;
+        color: #64748B;
+        font-weight: 600;
+      }
+
+      .opener-status-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 80%;
+      }
+
+      .opener-percent {
+        font-weight: 700;
+        color: #4F46E5;
+      }
+
+      /* Skip Button */
+      .opener-skip-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 20;
+        background: #FFFFFF;
+        border: 1.5px solid #E2E8F0;
+        border-radius: 9999px;
+        padding: 6px 14px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748B;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+      }
+
+      .opener-skip-btn:hover {
+        background: #F8FAFC;
+        color: #1E293B;
+        border-color: #CBD5E1;
+      }
+
+      /* 2D Vector Features Pill List */
+      .opener-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+        margin-top: 18px;
+      }
+
+      .opener-pill-item {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 8px;
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body class="bg-[#F8FAFC] text-[#1E293B] antialiased selection:bg-[#4F46E5]/20 selection:text-[#4F46E5]">
+    
+    <!-- 2D Modern Educational Opener Animation -->
+    <div id="genius-opener">
+      <div class="opener-bg-shape opener-bg-shape-1"></div>
+      <div class="opener-bg-shape opener-bg-shape-2"></div>
+
+      <button id="opener-skip" class="opener-skip-btn" type="button" onclick="window.dismissAppOpener(true)">
+        <span>Lewati</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+
+      <div class="opener-card">
+        <!-- 2D Animated Emblem Icon -->
+        <div class="opener-icon-wrap">
+          <div class="opener-icon-ring"></div>
+          <div class="opener-icon-inner">
+            <!-- 2D Modern School / Genius SVG Icon -->
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Open Book Base -->
+              <path d="M8 34C12 32 18 32 24 35C30 32 36 32 40 34V14C36 12 30 12 24 15C18 12 12 12 8 14V34Z" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2.5" stroke-linejoin="round"/>
+              <path d="M24 15V35" stroke="#4F46E5" stroke-width="2.5" stroke-linecap="round"/>
+              <!-- Graduation Cap / Diamond Star -->
+              <path d="M24 8L34 13L24 18L14 13L24 8Z" fill="#06B6D4" stroke="#0891B2" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M34 13V20" stroke="#0891B2" stroke-width="2" stroke-linecap="round"/>
+              <!-- Sparkles -->
+              <circle cx="37" cy="9" r="1.5" fill="#F59E0B" />
+              <circle cx="11" cy="9" r="1.5" fill="#10B981" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- School Badge -->
+        <div class="opener-badge">
+          <span class="opener-badge-dot"></span>
+          <span>SDN TAMANSARI</span>
+        </div>
+
+        <!-- App Brand Title -->
+        <h1 class="opener-title">
+          <span>GENIUS</span> APP
+        </h1>
+        <p class="opener-subtitle">
+          solusi jenius monitoring terpadu sekolah
+        </p>
+
+        <!-- 2D Progress Indicator -->
+        <div class="opener-progress-box">
+          <div class="opener-bar-track">
+            <div id="opener-bar" class="opener-bar-fill"></div>
+          </div>
+          <div class="opener-status-row">
+            <span id="opener-status" class="opener-status-text">Memuat sistem monitoring...</span>
+            <span id="opener-percent" class="opener-percent">0%</span>
+          </div>
+        </div>
+
+        <!-- Feature Pills (2D Flat) -->
+        <div class="opener-pills">
+          <span class="opener-pill-item">📚 Jurnal Mengajar</span>
+          <span class="opener-pill-item">🌱 Pembiasaan</span>
+          <span class="opener-pill-item">💡 GENIUS Class</span>
+          <span class="opener-pill-item">🤝 Kombel</span>
+          <span class="opener-pill-item">⭐ 7 Habits</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Opener Controller Script -->
+    <script>
+      (function() {
+        var opener = document.getElementById('genius-opener');
+        var bar = document.getElementById('opener-bar');
+        var percent = document.getElementById('opener-percent');
+        var status = document.getElementById('opener-status');
+        var progress = 0;
+        var dismissed = false;
+
+        var steps = [
+          { at: 25, text: 'Memuat modul pembelajaran & administrasi...' },
+          { at: 55, text: 'Menghubungkan Spreadsheet & Google Apps Script...' },
+          { at: 85, text: 'Sinkronisasi profil sekolah SDN Tamansari...' },
+          { at: 100, text: 'Solusi Jenius siap digunakan!' }
+        ];
+
+        var interval = setInterval(function() {
+          if (dismissed) return;
+          progress += Math.floor(Math.random() * 12) + 8;
+          if (progress > 95) progress = 95;
+
+          if (bar) bar.style.width = progress + '%';
+          if (percent) percent.textContent = progress + '%';
+
+          for (var i = 0; i < steps.length; i++) {
+            if (progress >= steps[i].at) {
+              if (status) status.textContent = steps[i].text;
+            }
+          }
+        }, 120);
+
+        window.dismissAppOpener = function(immediate) {
+          if (dismissed) return;
+          dismissed = true;
+          clearInterval(interval);
+
+          if (bar) bar.style.width = '100%';
+          if (percent) percent.textContent = '100%';
+          if (status) status.textContent = 'Siap digunakan!';
+
+          setTimeout(function() {
+            if (opener) {
+              opener.classList.add('opener-hidden');
+              setTimeout(function() {
+                if (opener && opener.parentNode) {
+                  opener.parentNode.removeChild(opener);
+                }
+              }, 480);
+            }
+          }, immediate ? 50 : 350);
+        };
+
+        // Fallback safety timeout: Opener auto dismisses after 2.4 seconds
+        setTimeout(function() {
+          if (!dismissed) {
+            window.dismissAppOpener();
+          }
+        }, 2400);
+      })();
+    </script>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
