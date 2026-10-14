@@ -163,6 +163,14 @@ export interface SevenHabitsData {
   kelas: string;
   jumlahSiswa: number;
   habits: HabitCheckItem[];
+  // Kolom langsung sesuai Code.gs & Google Spreadsheet
+  bangunPagi?: string;
+  beribadah?: string;
+  berolahraga?: string;
+  makanSehat?: string;
+  gemarBelajar?: string;
+  bermasyarakat?: string;
+  tidurCepat?: string;
   catatanRefleksi?: string;
   tindakLanjut?: string;
   fotoData?: string;

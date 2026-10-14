@@ -36,6 +36,7 @@ import {
   SPREADSHEET_URL,
   SHEET_CONFIGS,
   setDatabaseConnectionInfo,
+  DEFAULT_APPS_SCRIPT_URL,
 } from '../services/googleSheetsService';
 
 interface DatabaseSettingsModalProps {
@@ -309,7 +310,7 @@ export const DatabaseSettingsModal: React.FC<DatabaseSettingsModalProps> = ({
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
                   URL Google Apps Script Web App (Code.gs)
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={urlInput}
@@ -317,15 +318,28 @@ export const DatabaseSettingsModal: React.FC<DatabaseSettingsModalProps> = ({
                     placeholder="https://script.google.com/macros/s/.../exec"
                     className="flex-1 px-3.5 py-2.5 bg-slate-50 border-2 border-slate-200 focus:border-indigo-500 focus:bg-white rounded-xl text-xs font-mono outline-hidden transition-all text-slate-800"
                   />
-                  <button
-                    onClick={handleSaveUrl}
-                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Simpan
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveUrl}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors shrink-0"
+                    >
+                      Simpan
+                    </button>
+                    <button
+                      onClick={() => {
+                        setUrlInput(DEFAULT_APPS_SCRIPT_URL);
+                        setAppsScriptUrl(DEFAULT_APPS_SCRIPT_URL);
+                        showToast('URL Google Apps Script otomatis berhasil diterapkan!', 'success');
+                      }}
+                      className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors shrink-0"
+                      title="Kembalikan ke URL Google Apps Script bawaan otomatis"
+                    >
+                      Reset Otomatis
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Dapatkan URL ini setelah menerapkan (deploy) file <span className="font-semibold text-slate-700">Code.gs</span> sebagai Aplikasi Web dengan akses "Siapa Saja" (Anyone).
+                  Koneksi otomatis aktif ke Google Spreadsheet SDN Tamansari. Anda juga dapat mengganti dengan URL Apps Script kustom Anda sendiri.
                 </p>
               </div>
 
@@ -740,9 +754,20 @@ function initAllSheets() {
       hr.setFontWeight("bold").setBackground("#4F46E5").setFontColor("#FFFFFF");
       sheet.setFrozenRows(1);
       
-      // Master Akun Pengguna: Siap diisi langsung dari data spreadsheet sekolah (Tanpa akun dummy)
+      // Master Akun Pengguna: Akun Resmi SDN Tamansari (Pengawas sampai Orang Tua)
       if (config.name === "Akun Pengguna") {
-        // Biarkan kosong di bawah header agar murni menggunakan data resmi sekolah Anda
+        var officialAccounts = [
+          ["Pengawas", "pengawas", "pengawas123", "Drs. H. Bambang Sujarwo, M.Pd", "196803121993031005", "Pengawas Pembina SD"],
+          ["Kepala Sekolah", "ks", "ks123", "Muhammad Rosyid Jamily, M.Pd", "198506142010011018", "Kepala Sekolah"],
+          ["Guru", "guru", "guru123", "Novia Rahmawati, S.Pd", "198804152015022003", "Guru Kelas 4A"],
+          ["Pembina Ekskul", "pembina", "pembina123", "Rif'an, S.Pd.I", "199008202019031008", "Pembina Pramuka & Qurani"],
+          ["Murid", "murid", "murid123", "Muhammad Fathan Al-Faruq", "0145892311", "Kelas 4A"],
+          ["Orang Tua", "orangtua", "ortu123", "Hendra Wijaya, S.T", "081234567890", "Wali Murid Kelas 4A"],
+          ["Admin", "admin", "admin123", "Administrator GENIUS", "-", "Pengelola Sistem"]
+        ];
+        for (var a = 0; a < officialAccounts.length; a++) {
+          sheet.appendRow(officialAccounts[a]);
+        }
       }
       
       created.push(config.name);
@@ -810,6 +835,41 @@ function doGet(e) {
       }
     }
     return createJsonResponse({ success: true, count: accList.length, accounts: accList });
+  }
+
+  // Ambil data Seven Habits
+  if (action === "getSevenHabits" || (action === "getData" && e.parameter && (e.parameter.sheet === "Seven Habits" || e.parameter.sheet === "SevenHabits"))) {
+    var shSheet = ss.getSheetByName("Seven Habits");
+    if (!shSheet) {
+      initAllSheets();
+      shSheet = ss.getSheetByName("Seven Habits");
+    }
+    var lr = shSheet.getLastRow();
+    if (lr <= 1) return createJsonResponse({ success: true, count: 0, entries: [] });
+    var shVals = shSheet.getRange(2, 1, lr - 1, 15).getValues();
+    var list = [];
+    for (var j = 0; j < shVals.length; j++) {
+      var row = shVals[j];
+      list.push({
+        id: "sh-" + (j + 1),
+        timestamp: String(row[0] || ""),
+        date: String(row[1] || ""),
+        guru: String(row[2] || "-"),
+        kelas: String(row[3] || "").replace(/^Kelas\\s+/i, ""),
+        jumlahSiswa: Number(row[4]) || 0,
+        bangunPagi: String(row[5] || "Terlaksana"),
+        beribadah: String(row[6] || "Terlaksana"),
+        berolahraga: String(row[7] || "Terlaksana"),
+        makanSehat: String(row[8] || "Terlaksana"),
+        gemarBelajar: String(row[9] || "Terlaksana"),
+        bermasyarakat: String(row[10] || "Terlaksana"),
+        tidurCepat: String(row[11] || "Terlaksana"),
+        catatanRefleksi: String(row[12] || ""),
+        tindakLanjut: String(row[13] || ""),
+        fotoData: String(row[14] || "")
+      });
+    }
+    return createJsonResponse({ success: true, count: list.length, entries: list });
   }
 
   // Generic getData
@@ -889,7 +949,23 @@ function doPost(e) {
 
     if (action === "saveSevenHabits") {
       var sh = payload.data || payload;
-      var shRow = [timestamp, sh.date||"-", sh.guru||"-", "Kelas " + (sh.kelas||"-"), sh.siswaCount||0, "Terlaksana", "Terlaksana", "Terlaksana", "Terlaksana", "Terlaksana", "Terlaksana", "Terlaksana", sh.refleksi||"-", sh.rencanaLanjut||"-", sh.fotoData ? "Ada Foto" : "Tanpa Foto"];
+      var shRow = [
+        timestamp,
+        sh.date || "-",
+        sh.guru || "-",
+        "Kelas " + (sh.kelas || "-"),
+        sh.siswaCount || sh.jumlahSiswa || 0,
+        sh.bangunPagi || "Terlaksana",
+        sh.beribadah || "Terlaksana",
+        sh.berolahraga || "Terlaksana",
+        sh.makanSehat || "Terlaksana",
+        sh.gemarBelajar || "Terlaksana",
+        sh.bermasyarakat || "Terlaksana",
+        sh.tidurCepat || "Terlaksana",
+        sh.refleksi || sh.catatanRefleksi || "-",
+        sh.rencanaLanjut || sh.tindakLanjut || "-",
+        sh.fotoData ? "Ada Foto" : "Tanpa Foto"
+      ];
       return createJsonResponse({ success: true, result: appendRowToSheet("Seven Habits", shRow) });
     }
 

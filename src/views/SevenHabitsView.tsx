@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -17,16 +17,23 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
-  Info,
-  Clock,
+  RefreshCw,
+  Database,
+  ExternalLink,
+  Search,
   Check,
   AlertCircle,
-  Plus,
-  Trash2,
+  FileSpreadsheet,
+  Clock,
 } from 'lucide-react';
 import { GURU_LIST, KELAS_LIST, SEVEN_HABITS_LIST, HabitDefinition } from '../data/initialData';
 import { SevenHabitsData, HabitCheckItem } from '../types';
 import { ImageUpload } from '../components/ImageUpload';
+import {
+  fetchSevenHabitsFromSpreadsheet,
+  getActiveSpreadsheetId,
+  SPREADSHEET_URL,
+} from '../services/googleSheetsService';
 
 interface SevenHabitsViewProps {
   onBack: () => void;
@@ -52,25 +59,79 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 7 Habits Checklist State
-  const [habitsData, setHabitsData] = useState<Record<string, {
-    status: 'sangat_baik' | 'baik' | 'cukup' | 'perlu_bimbingan';
-    jumlahSiswa: number;
-    catatan: string;
-  }>>(() => {
+  const [habitsData, setHabitsData] = useState<
+    Record<
+      string,
+      {
+        status: 'sangat_baik' | 'baik' | 'cukup' | 'perlu_bimbingan';
+        jumlahSiswa: number;
+        catatan: string;
+      }
+    >
+  >(() => {
     const initial: Record<string, any> = {};
     SEVEN_HABITS_LIST.forEach((h) => {
       initial[h.id] = {
         status: 'sangat_baik',
-        jumlahSiswa: 27,
+        jumlahSiswa: 28,
         catatan: '',
       };
     });
     return initial;
   });
 
-  // History Filter
+  // History & Spreadsheet Sync State
+  const [entries, setEntries] = useState<SevenHabitsData[]>(savedEntries);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  // Search & Filter State
   const [filterKelas, setFilterKelas] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+
+  // Update entries when parent savedEntries changes
+  useEffect(() => {
+    if (savedEntries.length > 0) {
+      setEntries(savedEntries);
+    }
+  }, [savedEntries]);
+
+  // Fungsi untuk menarik data dari Google Spreadsheet tab "Seven Habits"
+  const handleSyncFromSpreadsheet = async () => {
+    setIsSyncing(true);
+    setSyncStatus('Menghubungkan ke Google Spreadsheet...');
+    try {
+      const res = await fetchSevenHabitsFromSpreadsheet();
+      if (res.data && res.data.length > 0) {
+        setEntries(res.data);
+        setSyncStatus(`Berhasil mengambil ${res.data.length} data Seven Habits dari Spreadsheet.`);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+      } else {
+        setSyncStatus(res.message || 'Sheet Seven Habits masih kosong.');
+      }
+    } catch (err) {
+      console.error('Error sync Seven Habits:', err);
+      setSyncStatus('Koneksi spreadsheet tertunda. Menampilkan data tersimpan.');
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncStatus(null), 4000);
+    }
+  };
+
+  // Quick Action: Tandai Semua 7 Kebiasaan Terlaksana (Sangat Baik)
+  const handleSetAllBest = () => {
+    const updated: Record<string, any> = {};
+    SEVEN_HABITS_LIST.forEach((h) => {
+      updated[h.id] = {
+        status: 'sangat_baik',
+        jumlahSiswa: jumlahSiswa,
+        catatan: habitsData[h.id]?.catatan || '',
+      };
+    });
+    setHabitsData(updated);
+  };
 
   const handleHabitChange = (
     habitId: string,
@@ -105,6 +166,21 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
       default:
         return <Sparkles className="w-5 h-5" />;
     }
+  };
+
+  const formatHabitValue = (habitId: string): string => {
+    const current = habitsData[habitId];
+    if (!current) return 'Terlaksana';
+    const label =
+      current.status === 'sangat_baik'
+        ? 'Sangat Baik'
+        : current.status === 'baik'
+        ? 'Baik'
+        : current.status === 'cukup'
+        ? 'Cukup'
+        : 'Perlu Bimbingan';
+    const detailNote = current.catatan.trim() ? ` (${current.catatan.trim()})` : '';
+    return `${label} [${current.jumlahSiswa}/${jumlahSiswa} Siswa]${detailNote}`;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -146,6 +222,14 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
       kelas,
       jumlahSiswa,
       habits,
+      // Kolom langsung sesuai format Code.gs & Sheet
+      bangunPagi: formatHabitValue('bangun-pagi'),
+      beribadah: formatHabitValue('beribadah'),
+      berolahraga: formatHabitValue('berolahraga'),
+      makanSehat: formatHabitValue('makan-sehat'),
+      gemarBelajar: formatHabitValue('gemar-belajar'),
+      bermasyarakat: formatHabitValue('bermasyarakat'),
+      tidurCepat: formatHabitValue('tidur-cepat'),
       catatanRefleksi: catatanRefleksi.trim() || undefined,
       tindakLanjut: tindakLanjut.trim() || undefined,
       fotoData: fotoData || undefined,
@@ -153,81 +237,155 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
 
     setTimeout(() => {
       onSave(newRecord);
+      setEntries((prev) => [newRecord, ...prev]);
       setIsSubmitting(false);
+      setActiveSubTab('history');
     }, 400);
   };
 
-  const filteredHistory = savedEntries.filter((item) => {
-    if (filterKelas === 'all') return true;
-    return item.kelas === filterKelas;
+  // Filter history entries
+  const filteredHistory = entries.filter((item) => {
+    const matchKelas = filterKelas === 'all' || item.kelas.toLowerCase() === filterKelas.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+    const matchSearch =
+      !query ||
+      item.guru.toLowerCase().includes(query) ||
+      item.kelas.toLowerCase().includes(query) ||
+      (item.catatanRefleksi && item.catatanRefleksi.toLowerCase().includes(query)) ||
+      (item.tindakLanjut && item.tindakLanjut.toLowerCase().includes(query));
+    return matchKelas && matchSearch;
   });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div className="space-y-6 max-w-5xl mx-auto pb-16">
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors shadow-2xs self-start"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Dashboard</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="w-10 h-10 rounded-2xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 flex items-center justify-center transition-all shadow-xs"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-extrabold uppercase tracking-wider">
+                🌟 Program Unggulan Murid
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                • SDN Tamansari
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
+              Seven Habits (7 Kebiasaan Anak Hebat)
+            </h1>
+          </div>
+        </div>
 
-        {/* Sub-tab Navigation */}
-        <div className="inline-flex rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold shadow-2xs self-start sm:self-auto">
+        {/* Sync & External Sheet Buttons */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveSubTab('form')}
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
-              activeSubTab === 'form'
-                ? 'bg-[#6C63FF] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            type="button"
+            onClick={handleSyncFromSpreadsheet}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 text-xs font-bold transition-all shadow-xs"
+            title="Tarik data terbaru dari Google Spreadsheet"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Form Input Seven Habits</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : 'text-slate-400'}`} />
+            <span>{isSyncing ? 'Menyinkronkan...' : 'Tarik dari Spreadsheet'}</span>
           </button>
-          <button
-            onClick={() => setActiveSubTab('history')}
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
-              activeSubTab === 'history'
-                ? 'bg-[#6C63FF] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+
+          <a
+            href={SPREADSHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition-colors"
+            title="Buka Spreadsheet resmi di Google Drive"
           >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Riwayat & Rekap ({savedEntries.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveSubTab('guide')}
-            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
-              activeSubTab === 'guide'
-                ? 'bg-[#6C63FF] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Info className="w-3.5 h-3.5" />
-            <span>Pedoman 7 Kebiasaan</span>
-          </button>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden md:inline">Buka Sheet</span>
+            <ExternalLink className="w-3 h-3 text-emerald-600" />
+          </a>
         </div>
       </div>
 
-      {/* Hero Banner */}
+      {/* Sync Status Banner */}
+      <AnimatePresence>
+        {syncStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-xs"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{syncStatus}</span>
+            </div>
+            {lastSyncTime && (
+              <span className="text-[11px] text-emerald-700 font-semibold">
+                Pukul {lastSyncTime} WIB
+              </span>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Subtab Navigation */}
+      <div className="flex bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <button
+          onClick={() => setActiveSubTab('form')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all ${
+            activeSubTab === 'form'
+              ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Award className="w-4 h-4 text-[#6C63FF]" />
+          <span>Form Input Seven Habits</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('history')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all ${
+            activeSubTab === 'history'
+              ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Users className="w-4 h-4 text-emerald-600" />
+          <span>Riwayat &amp; Rekap ({entries.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('guide')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all ${
+            activeSubTab === 'guide'
+              ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 text-amber-600" />
+          <span>Panduan 7 Kebiasaan</span>
+        </button>
+      </div>
+
+      {/* Hero Banner Header */}
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl bg-gradient-to-r from-[#6C63FF] via-[#7B73FF] to-indigo-800 text-white p-6 sm:p-8 shadow-xl shadow-indigo-900/10 relative overflow-hidden"
+        initial={{ opacity: 0, scale: 0.99 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 p-6 sm:p-8 text-white shadow-lg shadow-orange-500/10"
       >
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs text-xs font-bold mb-3 border border-white/20">
-            <Award className="w-3.5 h-3.5 text-amber-300" />
-            <span>Karakter Unggul Pelajar Pancasila • SDN Tamansari</span>
+        <div className="relative z-10 max-w-2xl space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+            <span>Karakter Unggul Pelajar Indonesia</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">
             Seven Habits (7 Kebiasaan Anak Hebat Indonesia)
           </h2>
-          <p className="text-indigo-100 text-xs sm:text-sm mt-2 leading-relaxed font-normal">
-            Jurnal pembiasaan karakter luhur dan disiplin diri: <strong>Bangun pagi</strong>, <strong>Beribadah</strong>, <strong>Berolahraga</strong>, <strong>Makan sehat & bergizi</strong>, <strong>Gemar belajar</strong>, <strong>Bermasyarakat</strong>, dan <strong>Tidur cepat</strong>.
+          <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+            Jurnal pembiasaan karakter luhur dan disiplin diri: <strong>Bangun pagi</strong>, <strong>Beribadah</strong>, <strong>Berolahraga</strong>, <strong>Makan sehat &amp; bergizi</strong>, <strong>Gemar belajar</strong>, <strong>Bermasyarakat</strong>, dan <strong>Tidur cepat</strong>. Seluruh data otomatis terhubung ke sheet <em>"Seven Habits"</em>.
           </p>
         </div>
 
@@ -243,18 +401,30 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xl shadow-indigo-900/5 space-y-6"
         >
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
             <div>
               <h3 className="font-extrabold text-slate-800 text-lg">
                 Input Jurnal 7 Kebiasaan Anak Hebat
               </h3>
               <p className="text-xs text-slate-500">
-                Dokumentasikan ketercapaian pembiasaan 7 kebiasaan pada hari ini
+                Dokumentasikan ketercapaian pembiasaan 7 kebiasaan pada hari ini (Sesuai Code.gs &amp; Google Sheet)
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[#6C63FF] text-xs font-bold">
-              Formulir Harian
-            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSetAllBest}
+                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+                title="Tandai semua 7 kebiasaan dengan status Sangat Baik / Terlaksana"
+              >
+                <Check className="w-3.5 h-3.5 text-amber-600" />
+                <span>Set Semua Sangat Baik</span>
+              </button>
+              <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[#6C63FF] text-xs font-bold">
+                Formulir Harian
+              </span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -264,13 +434,15 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Tanggal *
                 </label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all"
-                />
+                <div className="relative">
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all"
+                  />
+                </div>
               </div>
 
               <div>
@@ -318,7 +490,10 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setJumlahSiswa((prev) => Math.max(1, prev - 1))}
+                    onClick={() => {
+                      const next = Math.max(1, jumlahSiswa - 1);
+                      setJumlahSiswa(next);
+                    }}
                     className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shrink-0"
                   >
                     -
@@ -329,12 +504,18 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                     max="60"
                     required
                     value={jumlahSiswa}
-                    onChange={(e) => setJumlahSiswa(Math.max(1, parseInt(e.target.value) || 0))}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      setJumlahSiswa(val);
+                    }}
                     className="w-full text-center py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#6C63FF]"
                   />
                   <button
                     type="button"
-                    onClick={() => setJumlahSiswa((prev) => prev + 1)}
+                    onClick={() => {
+                      const next = jumlahSiswa + 1;
+                      setJumlahSiswa(next);
+                    }}
                     className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shrink-0"
                   >
                     +
@@ -355,7 +536,7 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                   </h4>
                 </div>
                 <span className="text-[11px] text-slate-400">
-                  Total target: 7 pembiasaan harian
+                  Target: 7 pembiasaan harian murid
                 </span>
               </div>
 
@@ -496,7 +677,7 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                       <div className="mt-3 pt-3 border-t border-slate-200/60">
                         <input
                           type="text"
-                          placeholder={`Catatan spesifik pembiasaan "${habit.name}" hari ini (contoh: ${habit.detail.slice(0, 50)}...)`}
+                          placeholder={`Catatan spesifik pembiasaan "${habit.name}" hari ini (contoh: sholat tepat waktu, sarapan gizi seimbang...)`}
                           value={current.catatan}
                           onChange={(e) => handleHabitChange(habit.id, 'catatan', e.target.value)}
                           className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#6C63FF]"
@@ -512,59 +693,58 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Catatan Refleksi & Apresiasi Guru
+                  Catatan Refleksi &amp; Apresiasi Guru
                 </label>
                 <textarea
                   rows={3}
                   value={catatanRefleksi}
                   onChange={(e) => setCatatanRefleksi(e.target.value)}
-                  placeholder="Catatan perkembangan karakter anak hari ini, siswa yang menonjol, atau apresiasi kelas..."
-                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all resize-none"
+                  placeholder="Refleksi ketercapaian pembiasaan, apresiasi murid yang teladan, atau evaluasi kelas..."
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Rencana Tindak Lanjut & Kerja Sama Orang Tua
+                  Rencana Tindak Lanjut (RTL)
                 </label>
                 <textarea
                   rows={3}
                   value={tindakLanjut}
                   onChange={(e) => setTindakLanjut(e.target.value)}
-                  placeholder="Rencana penguatan habit berikutnya, sosialisasi ke paguyuban orang tua murid..."
-                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all resize-none"
+                  placeholder="Rencana tindak lanjut (misal: pemberian bintang penghargaan, komunikasi dengan orang tua...)"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#6C63FF] focus:ring-4 focus:ring-[#6C63FF]/10 transition-all"
                 />
               </div>
             </div>
 
-            {/* Foto Dokumentasi */}
+            {/* Dokumentasi Foto */}
             <div className="pt-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Dokumentasi Foto Pembiasaan Anak Hebat (Opsional)
+                Dokumentasi Kegiatan Pembiasaan (Opsional)
               </label>
               <ImageUpload
-                value={fotoData}
-                onChange={setFotoData}
-                label="Unggah foto kegiatan kebiasaan murid (makan sehat, ibadah, olahraga, dll)"
+                onImageSelected={(base64) => setFotoData(base64)}
+                currentImage={fotoData}
               />
             </div>
 
             {/* Submit Button */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={onBack}
-                className="px-5 py-3 rounded-2xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+                className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-3 rounded-2xl bg-[#6C63FF] hover:bg-[#5a52e0] active:scale-95 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white text-xs font-black shadow-md hover:shadow-lg hover:from-amber-600 hover:to-rose-600 transition-all disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Jurnal Seven Habits'}</span>
+                <span>{isSubmitting ? 'Menyimpan & Menyinkronkan...' : 'Simpan Jurnal Seven Habits'}</span>
               </button>
             </div>
           </form>
@@ -578,77 +758,119 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          {/* Filter Bar */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Filter Bar & Controls */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 className="font-extrabold text-slate-800 text-base">
-                Riwayat Jurnal Seven Habits
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-800 text-base">
+                  Riwayat Jurnal Seven Habits
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-black">
+                  {filteredHistory.length} Jurnal
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
-                Data jurnal 7 kebiasaan anak hebat yang telah tersimpan di sistem
+                Data jurnal 7 kebiasaan anak hebat yang tersinkronisasi dengan spreadsheet SDN Tamansari
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={filterKelas}
-                onChange={(e) => setFilterKelas(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#6C63FF]"
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari guru / catatan..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 focus:outline-none focus:border-[#6C63FF] w-40 sm:w-48"
+                />
+              </div>
+
+              {/* Kelas Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={filterKelas}
+                  onChange={(e) => setFilterKelas(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none"
+                >
+                  <option value="all">Semua Kelas</option>
+                  {KELAS_LIST.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sync Button */}
+              <button
+                type="button"
+                onClick={handleSyncFromSpreadsheet}
+                disabled={isSyncing}
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition-colors inline-flex items-center gap-1.5"
+                title="Tarik pembaruan dari Google Spreadsheet"
               >
-                <option value="all">Semua Kelas</option>
-                {KELAS_LIST.map((k) => (
-                  <option key={k.value} value={k.value}>
-                    {k.label}
-                  </option>
-                ))}
-              </select>
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : 'text-emerald-700'}`} />
+                <span>{isSyncing ? 'Sinkron...' : 'Sinkron'}</span>
+              </button>
             </div>
           </div>
 
           {/* List Entries */}
           {filteredHistory.length === 0 ? (
             <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center mx-auto mb-3">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
                 <Sparkles className="w-7 h-7" />
               </div>
               <h4 className="font-bold text-slate-700 text-sm">Belum Ada Riwayat Jurnal</h4>
               <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Silakan isi formulir jurnal Seven Habits pada tab "Form Input Seven Habits" untuk memulai pemantauan.
+                Silakan isi formulir Seven Habits atau klik "Tarik dari Spreadsheet" untuk memuat data dari spreadsheet resmi sekolah.
               </p>
-              <button
-                onClick={() => setActiveSubTab('form')}
-                className="mt-4 px-4 py-2 rounded-xl bg-[#6C63FF] text-white text-xs font-bold shadow-xs hover:bg-[#5a52e0] transition-colors"
-              >
-                Isi Jurnal Sekarang
-              </button>
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <button
+                  onClick={() => setActiveSubTab('form')}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-xs hover:from-amber-600 hover:to-orange-600 transition-colors"
+                >
+                  Isi Jurnal Sekarang
+                </button>
+                <button
+                  onClick={handleSyncFromSpreadsheet}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Ambil Data Spreadsheet</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3.5">
-              {filteredHistory.map((item) => {
-                const isExpanded = expandedEntryId === item.id;
+              {filteredHistory.map((item, idx) => {
+                const isExpanded = expandedEntryId === (item.id || `item-${idx}`);
+                const habitsList = item.habits || [];
                 const averagePersen =
-                  item.habits.length > 0
+                  habitsList.length > 0
                     ? Math.round(
-                        item.habits.reduce((acc, h) => acc + (h.persentase || 0), 0) /
-                          item.habits.length
+                        habitsList.reduce((acc, h) => acc + (h.persentase || 0), 0) /
+                          habitsList.length
                       )
                     : 100;
 
                 return (
                   <div
-                    key={item.id}
+                    key={item.id || `entry-${idx}`}
                     className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-all space-y-3"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#6C63FF] to-indigo-700 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0">
-                          {item.kelas.toUpperCase()}
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+                          {String(item.kelas || '').toUpperCase()}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-extrabold text-sm text-slate-800">
-                              Kelas {item.kelas.toUpperCase()} • {item.guru}
+                              Kelas {String(item.kelas || '').toUpperCase()} • {item.guru}
                             </h4>
                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black">
                               Ketercapaian: {averagePersen}%
@@ -662,7 +884,7 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
 
                       <button
                         onClick={() =>
-                          setExpandedEntryId(isExpanded ? null : (item.id || 'entry'))
+                          setExpandedEntryId(isExpanded ? null : (item.id || `item-${idx}`))
                         }
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold self-start sm:self-auto transition-colors"
                       >
@@ -677,19 +899,62 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
 
                     {/* Quick Habit Mini Badges */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-100 text-center">
-                      {item.habits.map((h, idx) => (
-                        <div
-                          key={h.id}
-                          className="p-2 rounded-xl bg-slate-50 border border-slate-100 text-center"
-                        >
-                          <span className="block text-[10px] font-bold text-slate-500 truncate">
-                            {idx + 1}. {h.name}
-                          </span>
-                          <span className="text-xs font-black text-indigo-600">
-                            {h.persentase}%
-                          </span>
-                        </div>
-                      ))}
+                      <div className="p-2 rounded-xl bg-amber-50/80 border border-amber-100">
+                        <span className="block text-[10px] font-bold text-amber-800 truncate">
+                          1. Bangun Pagi
+                        </span>
+                        <span className="text-[11px] font-black text-amber-900 truncate">
+                          {item.bangunPagi || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-emerald-50/80 border border-emerald-100">
+                        <span className="block text-[10px] font-bold text-emerald-800 truncate">
+                          2. Beribadah
+                        </span>
+                        <span className="text-[11px] font-black text-emerald-900 truncate">
+                          {item.beribadah || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-blue-50/80 border border-blue-100">
+                        <span className="block text-[10px] font-bold text-blue-800 truncate">
+                          3. Berolahraga
+                        </span>
+                        <span className="text-[11px] font-black text-blue-900 truncate">
+                          {item.berolahraga || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-rose-50/80 border border-rose-100">
+                        <span className="block text-[10px] font-bold text-rose-800 truncate">
+                          4. Makan Sehat
+                        </span>
+                        <span className="text-[11px] font-black text-rose-900 truncate">
+                          {item.makanSehat || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-purple-50/80 border border-purple-100">
+                        <span className="block text-[10px] font-bold text-purple-800 truncate">
+                          5. Belajar
+                        </span>
+                        <span className="text-[11px] font-black text-purple-900 truncate">
+                          {item.gemarBelajar || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-teal-50/80 border border-teal-100">
+                        <span className="block text-[10px] font-bold text-teal-800 truncate">
+                          6. Bermasyarakat
+                        </span>
+                        <span className="text-[11px] font-black text-teal-900 truncate">
+                          {item.bermasyarakat || 'Terlaksana'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-200">
+                        <span className="block text-[10px] font-bold text-slate-700 truncate">
+                          7. Tidur Cepat
+                        </span>
+                        <span className="text-[11px] font-black text-slate-800 truncate">
+                          {item.tidurCepat || 'Terlaksana'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Expanded Detail */}
@@ -699,63 +964,91 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
                           exit={{ opacity: 0, height: 0 }}
-                          className="pt-3 border-t border-slate-100 space-y-3 overflow-hidden"
+                          className="pt-3 border-t border-slate-100 space-y-4"
                         >
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {item.habits.map((h, i) => (
-                              <div
-                                key={h.id}
-                                className="p-3 rounded-2xl bg-indigo-50/40 border border-indigo-100 flex items-start gap-2.5 text-xs"
-                              >
-                                <span className="w-5 h-5 rounded-md bg-[#6C63FF] text-white flex items-center justify-center font-bold text-[10px] shrink-0">
-                                  {i + 1}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="font-extrabold text-slate-800">
-                                      {h.name}
-                                    </span>
-                                    <span className="font-bold text-emerald-700 text-[11px]">
-                                      {h.jumlahSiswa}/{item.jumlahSiswa} ({h.persentase}%)
-                                    </span>
+                          {/* 7 Habits Detail List */}
+                          <div className="space-y-2">
+                            <h5 className="font-extrabold text-xs text-slate-700 uppercase tracking-wider">
+                              Rincian Ketercapaian 7 Kebiasaan:
+                            </h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {SEVEN_HABITS_LIST.map((def) => {
+                                const hItem = habitsList.find((h) => h.id === def.id);
+                                const directVal =
+                                  def.id === 'bangun-pagi'
+                                    ? item.bangunPagi
+                                    : def.id === 'beribadah'
+                                    ? item.beribadah
+                                    : def.id === 'berolahraga'
+                                    ? item.berolahraga
+                                    : def.id === 'makan-sehat'
+                                    ? item.makanSehat
+                                    : def.id === 'gemar-belajar'
+                                    ? item.gemarBelajar
+                                    : def.id === 'bermasyarakat'
+                                    ? item.bermasyarakat
+                                    : item.tidurCepat;
+
+                                return (
+                                  <div
+                                    key={def.id}
+                                    className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-xs text-slate-800">
+                                        {def.number}. {def.name}
+                                      </span>
+                                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                        {directVal || 'Terlaksana'}
+                                      </span>
+                                    </div>
+                                    {hItem?.catatan && (
+                                      <p className="text-[11px] text-slate-500 italic">
+                                        Catatan: {hItem.catatan}
+                                      </p>
+                                    )}
                                   </div>
-                                  <p className="text-[11px] text-slate-500 italic mt-0.5">
-                                    • {h.tagline}
-                                  </p>
-                                  {h.catatan && (
-                                    <p className="text-[11px] text-slate-700 bg-white p-1.5 rounded-lg mt-1 border border-slate-200">
-                                      {h.catatan}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
+                                );
+                              })}
+                            </div>
                           </div>
 
+                          {/* Catatan Refleksi & RTL */}
                           {(item.catatanRefleksi || item.tindakLanjut) && (
-                            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100 text-xs space-y-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                               {item.catatanRefleksi && (
-                                <p>
-                                  <strong>Refleksi Guru:</strong> {item.catatanRefleksi}
-                                </p>
+                                <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/60 space-y-1">
+                                  <span className="font-bold text-[10px] uppercase tracking-wider text-amber-800">
+                                    Catatan Refleksi Guru:
+                                  </span>
+                                  <p className="text-xs text-slate-700 leading-relaxed">
+                                    {item.catatanRefleksi}
+                                  </p>
+                                </div>
                               )}
                               {item.tindakLanjut && (
-                                <p>
-                                  <strong>Tindak Lanjut:</strong> {item.tindakLanjut}
-                                </p>
+                                <div className="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-200/60 space-y-1">
+                                  <span className="font-bold text-[10px] uppercase tracking-wider text-indigo-800">
+                                    Rencana Tindak Lanjut:
+                                  </span>
+                                  <p className="text-xs text-slate-700 leading-relaxed">
+                                    {item.tindakLanjut}
+                                  </p>
+                                </div>
                               )}
                             </div>
                           )}
 
+                          {/* Foto Dokumentasi */}
                           {item.fotoData && (
                             <div className="pt-2">
-                              <p className="text-xs font-bold text-slate-600 mb-1.5">
-                                Dokumentasi Kegiatan:
-                              </p>
+                              <span className="block font-bold text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                                Foto Dokumentasi:
+                              </span>
                               <img
                                 src={item.fotoData}
-                                alt="Foto Pembiasaan"
-                                className="w-full max-h-64 object-cover rounded-2xl border border-slate-200"
+                                alt="Dokumentasi Seven Habits"
+                                className="w-32 h-32 object-cover rounded-2xl border border-slate-200 shadow-xs"
                               />
                             </div>
                           )}
@@ -770,7 +1063,7 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
         </motion.div>
       )}
 
-      {/* SUBTAB 3: PEDOMAN & PANDUAN 7 KEBIASAAN */}
+      {/* SUBTAB 3: PANDUAN 7 KEBIASAAN ANAK HEBAT */}
       {activeSubTab === 'guide' && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -779,10 +1072,10 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
         >
           <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
             <h3 className="font-extrabold text-slate-800 text-lg">
-              Pedoman 7 Kebiasaan Anak Hebat Indonesia
+              Panduan 7 Kebiasaan Anak Hebat Indonesia
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Panduan implementasi bagi guru, orang tua, dan murid SDN Tamansari
+              Pedoman komprehensif bagi guru pembina, wali kelas, orang tua, dan murid SDN Tamansari
             </p>
           </div>
 
@@ -794,35 +1087,39 @@ export const SevenHabitsView: React.FC<SevenHabitsViewProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${h.color} text-white flex items-center justify-center shadow-md shrink-0`}
+                    className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${h.color} text-white flex items-center justify-center shadow-xs shrink-0`}
                   >
                     {getHabitIcon(h.iconName)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-md bg-white text-slate-800 flex items-center justify-center font-black text-xs shadow-2xs">
+                      <span className="w-5 h-5 rounded-md bg-white text-slate-800 flex items-center justify-center text-xs font-black shadow-2xs">
                         {h.number}
                       </span>
-                      <h4 className="font-black text-base text-slate-900">{h.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-base">{h.name}</h4>
                     </div>
-                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border mt-1 ${h.badgeColor}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border mt-1 ${h.badgeColor}`}>
                       Target: {h.targetWaktu}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-xs p-3.5 rounded-2xl border border-white space-y-1.5">
+                <div className="space-y-1.5 pt-1">
                   <p className="text-xs font-bold text-slate-800">
-                    • Makna & Filosofi:
+                    Tujuan &amp; Esensi:
                   </p>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     {h.tagline}
                   </p>
                 </div>
 
-                <div className="text-xs text-slate-600 space-y-1">
-                  <p className="font-bold text-slate-800">• Praktik Pembiasaan Nyata:</p>
-                  <p className="leading-relaxed">{h.detail}</p>
+                <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+                  <p className="text-xs font-bold text-slate-800">
+                    Praktik Harian Murid:
+                  </p>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {h.detail}
+                  </p>
                 </div>
               </div>
             ))}

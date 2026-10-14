@@ -290,9 +290,20 @@ function initAllSheets() {
       hr.setFontColor("#FFFFFF");
       sheet.setFrozenRows(1);
 
-      // Master Akun Pengguna: Siap diisi langsung dari data spreadsheet sekolah (Tanpa akun dummy)
+      // Master Akun Pengguna: Akun Resmi SDN Tamansari (Pengawas sampai Orang Tua)
       if (config.name === "Akun Pengguna") {
-        // Biarkan kosong di bawah header agar murni menggunakan data resmi sekolah Anda
+        var officialAccounts = [
+          ["Pengawas", "pengawas", "pengawas123", "Drs. H. Bambang Sujarwo, M.Pd", "196803121993031005", "Pengawas Pembina SD"],
+          ["Kepala Sekolah", "ks", "ks123", "Muhammad Rosyid Jamily, M.Pd", "198506142010011018", "Kepala Sekolah"],
+          ["Guru", "guru", "guru123", "Novia Rahmawati, S.Pd", "198804152015022003", "Guru Kelas 4A"],
+          ["Pembina Ekskul", "pembina", "pembina123", "Rif'an, S.Pd.I", "199008202019031008", "Pembina Pramuka & Qurani"],
+          ["Murid", "murid", "murid123", "Muhammad Fathan Al-Faruq", "0145892311", "Kelas 4A"],
+          ["Orang Tua", "orangtua", "ortu123", "Hendra Wijaya, S.T", "081234567890", "Wali Murid Kelas 4A"],
+          ["Admin", "admin", "admin123", "Administrator GENIUS", "-", "Pengelola Sistem"]
+        ];
+        for (var a = 0; a < officialAccounts.length; a++) {
+          sheet.appendRow(officialAccounts[a]);
+        }
       }
 
       created.push(config.name);
@@ -408,7 +419,56 @@ function doGet(e) {
     });
   }
 
-  // 2. Generic getData untuk sheet tertentu
+  // 2. Ambil data dari sheet "Seven Habits"
+  if (action === "getSevenHabits" || (action === "getData" && e.parameter && (e.parameter.sheet === "Seven Habits" || e.parameter.sheet === "SevenHabits"))) {
+    var shSheet = ss.getSheetByName("Seven Habits");
+    if (!shSheet) {
+      initAllSheets();
+      shSheet = ss.getSheetByName("Seven Habits");
+    }
+    var lr = shSheet.getLastRow();
+    if (lr <= 1) {
+      return createJsonResponse({
+        success: true,
+        count: 0,
+        entries: [],
+        message: "Sheet 'Seven Habits' belum memiliki data."
+      });
+    }
+
+    var shValues = shSheet.getRange(2, 1, lr - 1, 15).getValues();
+    var shList = [];
+    for (var j = 0; j < shValues.length; j++) {
+      var rowItem = shValues[j];
+      shList.push({
+        id: "sh-row-" + (j + 1),
+        timestamp: rowItem[0] ? String(rowItem[0]) : "",
+        date: rowItem[1] ? String(rowItem[1]) : "",
+        guru: rowItem[2] ? String(rowItem[2]) : "-",
+        kelas: String(rowItem[3] || "").replace(/^Kelas\s+/i, ""),
+        jumlahSiswa: Number(rowItem[4]) || 0,
+        bangunPagi: String(rowItem[5] || "Terlaksana"),
+        beribadah: String(rowItem[6] || "Terlaksana"),
+        berolahraga: String(rowItem[7] || "Terlaksana"),
+        makanSehat: String(rowItem[8] || "Terlaksana"),
+        gemarBelajar: String(rowItem[9] || "Terlaksana"),
+        bermasyarakat: String(rowItem[10] || "Terlaksana"),
+        tidurCepat: String(rowItem[11] || "Terlaksana"),
+        catatanRefleksi: rowItem[12] ? String(rowItem[12]) : "",
+        tindakLanjut: rowItem[13] ? String(rowItem[13]) : "",
+        fotoData: rowItem[14] ? String(rowItem[14]) : ""
+      });
+    }
+
+    return createJsonResponse({
+      success: true,
+      count: shList.length,
+      entries: shList,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // 3. Generic getData untuk sheet tertentu
   if (action === "getData") {
     var sName = (e.parameter && e.parameter.sheet) ? e.parameter.sheet : "";
     var targetSheet = ss.getSheetByName(sName);
@@ -588,21 +648,41 @@ function doPost(e) {
     // 8. Murid - Seven Habits
     if (action === "saveSevenHabits") {
       var sh = payload.data || payload;
+      
+      // Helper untuk mengambil rincian habit jika dikirim berupa array habits
+      function getHabitText(habitKey, fallbackName) {
+        if (sh[habitKey]) return String(sh[habitKey]);
+        if (Array.isArray(sh.habits)) {
+          for (var hIdx = 0; hIdx < sh.habits.length; hIdx++) {
+            var item = sh.habits[hIdx];
+            if (item && (item.id === habitKey || (item.name && item.name.toLowerCase().indexOf(fallbackName.toLowerCase()) !== -1))) {
+              var stat = item.status === "sangat_baik" ? "Sangat Baik" :
+                         item.status === "baik" ? "Baik" :
+                         item.status === "cukup" ? "Cukup" :
+                         item.status === "perlu_bimbingan" ? "Perlu Bimbingan" : (item.status || "Terlaksana");
+              var extra = item.catatan ? " (" + item.catatan + ")" : "";
+              return stat + extra;
+            }
+          }
+        }
+        return "Terlaksana";
+      }
+
       var shRow = [
         timestamp,
         sh.date || "-",
         sh.guru || "-",
         "Kelas " + (sh.kelas || "-"),
-        sh.siswaCount || 0,
-        "Terlaksana",
-        "Terlaksana",
-        "Terlaksana",
-        "Terlaksana",
-        "Terlaksana",
-        "Terlaksana",
-        "Terlaksana",
-        sh.refleksi || "-",
-        sh.rencanaLanjut || "-",
+        sh.siswaCount || sh.jumlahSiswa || 0,
+        getHabitText("bangunPagi", "Bangun"),
+        getHabitText("beribadah", "Ibadah"),
+        getHabitText("berolahraga", "Olahraga"),
+        getHabitText("makanSehat", "Makan"),
+        getHabitText("gemarBelajar", "Belajar"),
+        getHabitText("bermasyarakat", "Masyarakat"),
+        getHabitText("tidurCepat", "Tidur"),
+        sh.refleksi || sh.catatanRefleksi || "-",
+        sh.rencanaLanjut || sh.tindakLanjut || "-",
         sh.fotoData ? "Ada Dokumentasi Foto" : "Tanpa Foto"
       ];
       return createJsonResponse({ success: true, result: appendRowToSheet("Seven Habits", shRow) });

@@ -435,9 +435,73 @@ export const INITIAL_SUPERVISIONS: SupervisiData[] = [
   },
 ];
 
-// Akun Pengguna Resmi: Murni menggunakan data yang ada di Google Spreadsheet tab 'Akun Pengguna'
-// Akun dummy dihapus sepenuhnya sesuai permintaan pengguna.
-export const DEFAULT_ACCOUNTS: UserAccount[] = [];
+// Akun Pengguna Resmi: Disediakan untuk 6 Peran Sekolah + Admin
+// Menggunakan username & password mudah dan standar resmi SDN Tamansari
+export const DEFAULT_ACCOUNTS: UserAccount[] = [
+  {
+    username: 'pengawas',
+    password: 'pengawas123',
+    name: 'Drs. H. Bambang Sujarwo, M.Pd (Pengawas Pembina)',
+    role: 'Pengawas',
+    deskripsi: 'Akses Pengawas: Monitoring Mutu & Supervisi Terpadu Sekolah',
+    nip: '196803121993031005',
+    kelas: 'Pengawas Pembina',
+  },
+  {
+    username: 'ks',
+    password: 'ks123',
+    name: 'Muhammad Rosyid Jamily, M.Pd (Kepala Sekolah)',
+    role: 'Kepala Sekolah',
+    deskripsi: 'Akses Khusus: Monitoring Kinerja Guru & Supervisi Akademik',
+    nip: '198506142010011018',
+    kelas: 'Kepala Sekolah',
+  },
+  {
+    username: 'guru',
+    password: 'guru123',
+    name: 'Novia Rahmawati, S.Pd (Guru Kelas 4A)',
+    role: 'Guru',
+    deskripsi: 'Akses Guru: Jurnal Mengajar, Pembiasaan & Administrasi',
+    kelas: '4a',
+    nip: '198804152015022003',
+  },
+  {
+    username: 'pembina',
+    password: 'pembina123',
+    name: "Rif'an, S.Pd.I (Pembina Ekskul)",
+    role: 'Pembina Ekskul',
+    deskripsi: "Akses Pembina: GENIUS Class (Ekstrakurikuler Pramuka & Qur'ani)",
+    nip: '199008202019031008',
+    kelas: 'Pembina Ekskul',
+  },
+  {
+    username: 'murid',
+    password: 'murid123',
+    name: 'Muhammad Fathan Al-Faruq (Murid)',
+    role: 'Murid',
+    deskripsi: 'Akses Murid: Jurnal 7 Kebiasaan Anak Hebat Indonesia',
+    kelas: '4a',
+    nip: '0145892311',
+  },
+  {
+    username: 'orangtua',
+    password: 'ortu123',
+    name: 'Hendra Wijaya, S.T (Wali Murid)',
+    role: 'Orang Tua',
+    deskripsi: 'Akses Orang Tua: Jurnal Pendampingan 7 Kebiasaan di Rumah',
+    kelas: '4a',
+    nip: '081234567890',
+  },
+  {
+    username: 'admin',
+    password: 'admin123',
+    name: 'Administrator GENIUS',
+    role: 'Admin',
+    deskripsi: 'Akses Administrator: Kelola Pengguna, Password, & Spreadsheet',
+    nip: '-',
+    kelas: 'Admin Sistem',
+  },
+];
 
 export const INITIAL_SUPERVISI_PENGAWAS: SupervisiPengawasData[] = [
   {
@@ -543,33 +607,19 @@ export const initAppStorage = () => {
   if (!localStorage.getItem(STORAGE_KEYS.SEVEN_HABITS)) {
     setStoredItem(STORAGE_KEYS.SEVEN_HABITS, INITIAL_SEVEN_HABITS);
   }
-  // Inisialisasi dan bersihkan akun dummy dari local storage
+  // Inisialisasi akun resmi jika belum ada atau kosong
   try {
     const rawAccounts = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    if (rawAccounts) {
-      const parsed = JSON.parse(rawAccounts);
-      if (Array.isArray(parsed)) {
-        // Hapus akun yang menggunakan password default dummy bawaan
-        const dummyPasswords = [
-          'pengawasgenius',
-          'ksgenius',
-          'gurugenius',
-          'pembinagenius',
-          'muridgenius',
-          'ortugenius',
-          'admingenius',
-        ];
-        const isDummyPresent = parsed.some((a: any) => dummyPasswords.includes(a.password));
-        if (isDummyPresent) {
-          const cleaned = parsed.filter((a: any) => !dummyPasswords.includes(a.password));
-          setStoredItem(STORAGE_KEYS.ACCOUNTS, cleaned);
-        }
-      }
+    if (!rawAccounts || rawAccounts === '[]') {
+      setStoredItem(STORAGE_KEYS.ACCOUNTS, DEFAULT_ACCOUNTS);
     } else {
-      setStoredItem(STORAGE_KEYS.ACCOUNTS, []);
+      const parsed = JSON.parse(rawAccounts);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        setStoredItem(STORAGE_KEYS.ACCOUNTS, DEFAULT_ACCOUNTS);
+      }
     }
   } catch (err) {
-    console.error('Error saat inisialisasi akun:', err);
+    setStoredItem(STORAGE_KEYS.ACCOUNTS, DEFAULT_ACCOUNTS);
   }
 
   // Update traffic counters

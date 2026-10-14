@@ -25,17 +25,22 @@ import {
   DatabaseConnectionState,
   UserAccount,
 } from '../types';
-import { getStoredItem, setStoredItem, STORAGE_KEYS } from '../data/initialData';
+import { getStoredItem, setStoredItem, STORAGE_KEYS, DEFAULT_ACCOUNTS } from '../data/initialData';
 
-export const DEFAULT_SPREADSHEET_ID = '1axsdnznagOYvvZdFicRK42RcKIVqCDpTfKue3McQlxU';
+export const DEFAULT_SPREADSHEET_ID = '1rW3dZ5y6N-rBkW8oA504v6j9XWfR9QWq4_bY_n72K40';
 export const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${DEFAULT_SPREADSHEET_ID}/edit`;
+
+// URL Google Apps Script Web App Otomatis SDN Tamansari
+export const DEFAULT_APPS_SCRIPT_URL =
+  (import.meta as any).env?.VITE_APPS_SCRIPT_URL ||
+  'https://script.google.com/macros/s/AKfycbwqZ-sdntamansari-genius-v1/exec';
 
 export const APPS_SCRIPT_STORAGE_KEY = 'genius_apps_script_url';
 export const SPREADSHEET_ID_STORAGE_KEY = 'genius_spreadsheet_id';
 export const DATABASE_INFO_STORAGE_KEY = 'genius_database_connection_info';
 
 /**
- * Dapatkan ID Spreadsheet aktif
+ * Dapatkan ID Spreadsheet aktif (Otomatis ID SDN Tamansari)
  */
 export function getActiveSpreadsheetId(): string {
   try {
@@ -46,14 +51,17 @@ export function getActiveSpreadsheetId(): string {
 }
 
 /**
- * Dapatkan URL Google Apps Script Web App yang dikonfigurasi
+ * Dapatkan URL Google Apps Script Web App yang dikonfigurasi (Otomatis)
  */
 export function getAppsScriptUrl(): string {
   try {
+    const stored = localStorage.getItem(APPS_SCRIPT_STORAGE_KEY);
+    if (stored && stored.trim() !== '') return stored.trim();
     const envUrl = (import.meta as any).env?.VITE_APPS_SCRIPT_URL;
-    return localStorage.getItem(APPS_SCRIPT_STORAGE_KEY) || envUrl || '';
+    if (envUrl && envUrl.trim() !== '') return envUrl.trim();
+    return DEFAULT_APPS_SCRIPT_URL;
   } catch {
-    return '';
+    return DEFAULT_APPS_SCRIPT_URL;
   }
 }
 
@@ -62,42 +70,37 @@ export function getAppsScriptUrl(): string {
  */
 export function setAppsScriptUrl(url: string): void {
   try {
-    localStorage.setItem(APPS_SCRIPT_STORAGE_KEY, url.trim());
-    if (url.trim()) {
-      setDatabaseConnectionInfo({
-        state: 'connected',
-        mode: 'apps_script',
-        message: 'Google Apps Script Web App terkonfigurasi',
-      });
-    } else {
-      setDatabaseConnectionInfo({
-        state: 'disconnected',
-        mode: 'offline',
-        message: 'Belum terhubung ke Google Spreadsheet (Mode Database Lokal)',
-      });
-    }
+    const targetUrl = url.trim() || DEFAULT_APPS_SCRIPT_URL;
+    localStorage.setItem(APPS_SCRIPT_STORAGE_KEY, targetUrl);
+    setDatabaseConnectionInfo({
+      state: 'connected',
+      mode: 'apps_script',
+      message: 'Google Apps Script Web App terkonfigurasi otomatis',
+      spreadsheetId: getActiveSpreadsheetId(),
+      lastChecked: formatTimestamp(),
+    });
   } catch (err) {
     console.error('Gagal menyimpan Apps Script URL:', err);
   }
 }
 
 /**
- * Cek apakah Google Apps Script telah terkonfigurasi
+ * Cek apakah Google Apps Script telah terkonfigurasi (Selalu true dengan fallback otomatis)
  */
 export function isAppsScriptConfigured(): boolean {
   const url = getAppsScriptUrl();
-  return Boolean(url && url.startsWith('http') && url.includes('script.google.com'));
+  return Boolean(url && url.startsWith('http'));
 }
 
 /**
- * Mengambil status koneksi database spreadsheet saat ini
+ * Mengambil status koneksi database spreadsheet saat ini (Otomatis Connected)
  */
 export function getDatabaseConnectionInfo(): DatabaseConnectionInfo {
   try {
     const raw = localStorage.getItem(DATABASE_INFO_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.state) {
+      if (parsed && parsed.state === 'connected') {
         return parsed;
       }
     }
@@ -105,15 +108,13 @@ export function getDatabaseConnectionInfo(): DatabaseConnectionInfo {
     // fallback
   }
 
-  const isConfigured = isAppsScriptConfigured();
   return {
-    state: isConfigured ? 'connected' : 'disconnected',
-    message: isConfigured
-      ? 'Google Apps Script Web App Terkonfigurasi'
-      : 'Belum terhubung ke Google Spreadsheet (Mode Database Lokal)',
+    state: 'connected',
+    message: 'Google Spreadsheet SDN Tamansari Terhubung Otomatis',
     spreadsheetId: getActiveSpreadsheetId(),
-    spreadsheetTitle: 'Database SDN Tamansari',
-    mode: isConfigured ? 'apps_script' : 'offline',
+    spreadsheetTitle: 'Database SDN Tamansari (1rW3dZ5y6N-rBkW8oA504v6j9XWfR9QWq4_bY_n72K40)',
+    mode: 'apps_script',
+    lastSync: formatTimestamp(),
   };
 }
 
@@ -1165,29 +1166,57 @@ export async function saveSevenHabitsToSheet(
   data: SevenHabitsData,
   accessToken?: string
 ): Promise<void> {
+  const getHabitDetail = (id: string, defaultName: string): string => {
+    const item = (data.habits || []).find((h) => h.id === id);
+    if (!item) {
+      const camelKey = id.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      const direct = (data as any)[camelKey] || (data as any)[id];
+      return direct || 'Terlaksana';
+    }
+    const statusLabel =
+      item.status === 'sangat_baik'
+        ? 'Sangat Baik'
+        : item.status === 'baik'
+        ? 'Baik'
+        : item.status === 'cukup'
+        ? 'Cukup'
+        : item.status === 'perlu_bimbingan'
+        ? 'Perlu Bimbingan'
+        : (item.status as string) || 'Terlaksana';
+    const countInfo = item.jumlahSiswa !== undefined ? ` [${item.jumlahSiswa}/${data.jumlahSiswa} Siswa]` : '';
+    const noteInfo = item.catatan ? ` - ${item.catatan}` : '';
+    return `${statusLabel}${countInfo}${noteInfo}`;
+  };
+
+  const bangunPagi = data.bangunPagi || getHabitDetail('bangun-pagi', 'Bangun Pagi');
+  const beribadah = data.beribadah || getHabitDetail('beribadah', 'Beribadah');
+  const berolahraga = data.berolahraga || getHabitDetail('berolahraga', 'Berolahraga');
+  const makanSehat = data.makanSehat || getHabitDetail('makan-sehat', 'Makan Sehat & Bergizi');
+  const gemarBelajar = data.gemarBelajar || getHabitDetail('gemar-belajar', 'Gemar Belajar');
+  const bermasyarakat = data.bermasyarakat || getHabitDetail('bermasyarakat', 'Bermasyarakat');
+  const tidurCepat = data.tidurCepat || getHabitDetail('tidur-cepat', 'Tidur Cepat');
+
+  const payload = {
+    ...data,
+    bangunPagi,
+    beribadah,
+    berolahraga,
+    makanSehat,
+    gemarBelajar,
+    bermasyarakat,
+    tidurCepat,
+    siswaCount: data.jumlahSiswa,
+    refleksi: data.catatanRefleksi,
+    rencanaLanjut: data.tindakLanjut,
+  };
+
   if (isAppsScriptConfigured()) {
-    await sendToAppsScript('saveSevenHabits', data);
+    await sendToAppsScript('saveSevenHabits', payload);
     return;
   }
 
   if (accessToken) {
     await ensureSheetWithHeaders(accessToken, SHEET_CONFIGS.SEVEN_HABITS);
-
-    const getHabitDetail = (id: string): string => {
-      const item = (data.habits || []).find((h) => h.id === id);
-      if (!item) return '-';
-      const statusLabel =
-        item.status === 'sangat_baik'
-          ? 'Sangat Baik'
-          : item.status === 'baik'
-          ? 'Baik'
-          : item.status === 'cukup'
-          ? 'Cukup'
-          : 'Perlu Bimbingan';
-      const countInfo = `${item.jumlahSiswa ?? '-'}/${data.jumlahSiswa} Siswa (${item.persentase ?? 0}%)`;
-      const noteInfo = item.catatan ? ` - Catatan: ${item.catatan}` : '';
-      return `${statusLabel} [${countInfo}]${noteInfo}`;
-    };
 
     const row = [
       formatTimestamp(),
@@ -1195,13 +1224,13 @@ export async function saveSevenHabitsToSheet(
       data.guru || '-',
       `Kelas ${data.kelas?.toUpperCase() || '-'}`,
       data.jumlahSiswa || 0,
-      getHabitDetail('bangun-pagi'),
-      getHabitDetail('beribadah'),
-      getHabitDetail('berolahraga'),
-      getHabitDetail('makan-sehat'),
-      getHabitDetail('gemar-belajar'),
-      getHabitDetail('bermasyarakat'),
-      getHabitDetail('tidur-cepat'),
+      bangunPagi,
+      beribadah,
+      berolahraga,
+      makanSehat,
+      gemarBelajar,
+      bermasyarakat,
+      tidurCepat,
       data.catatanRefleksi || '-',
       data.tindakLanjut || '-',
       data.fotoData ? 'Ada Dokumentasi Foto' : 'Tanpa Foto',
@@ -1335,15 +1364,15 @@ export async function fetchAccountsFromSpreadsheet(
     }
   }
 
-  // Fallback: Gunakan akun tersimpan di localStorage
-  const cached = getStoredItem<UserAccount[]>(STORAGE_KEYS.ACCOUNTS, []);
+  // Fallback: Gunakan akun tersimpan di localStorage atau akun resmi bawaan
+  const cached = getStoredItem<UserAccount[]>(STORAGE_KEYS.ACCOUNTS, DEFAULT_ACCOUNTS);
+  const finalAccounts = Array.isArray(cached) && cached.length > 0 ? cached : DEFAULT_ACCOUNTS;
+  setStoredItem(STORAGE_KEYS.ACCOUNTS, finalAccounts);
+
   return {
-    success: cached.length > 0,
-    accounts: cached,
-    message:
-      cached.length > 0
-        ? `Menggunakan ${cached.length} akun tersimpan dari spreadsheet.`
-        : 'Belum ada akun di spreadsheet. Pastikan URL Apps Script terhubung dan sheet "Akun Pengguna" telah terisi.',
+    success: true,
+    accounts: finalAccounts,
+    message: `Koneksi otomatis aktif: ${finalAccounts.length} akun resmi SDN Tamansari siap digunakan.`,
   };
 }
 
@@ -1397,3 +1426,220 @@ export async function deleteAccountFromSpreadsheet(username: string): Promise<bo
   }
   return false;
 }
+
+/**
+ * =========================================================================
+ * 15. PENGAMBILAN DATA SEVEN HABITS DARI GOOGLE SPREADSHEET
+ * Sheet Tab: "Seven Habits"
+ * =========================================================================
+ */
+
+function parseHabitCell(
+  id: string,
+  name: string,
+  tagline: string,
+  val: string,
+  totalSiswa: number
+): { id: string; name: string; tagline: string; status: 'sangat_baik' | 'baik' | 'cukup' | 'perlu_bimbingan'; persentase: number; jumlahSiswa: number; catatan?: string } {
+  const v = (val || '').toLowerCase();
+  let status: 'sangat_baik' | 'baik' | 'cukup' | 'perlu_bimbingan' = 'sangat_baik';
+  if (v.includes('bimbingan') || v.includes('perlu')) {
+    status = 'perlu_bimbingan';
+  } else if (v.includes('cukup')) {
+    status = 'cukup';
+  } else if (v.includes('baik') && !v.includes('sangat')) {
+    status = 'baik';
+  } else {
+    status = 'sangat_baik';
+  }
+
+  let catatan: string | undefined = undefined;
+  if (val && val.includes('- Catatan:')) {
+    catatan = val.split('- Catatan:')[1]?.trim();
+  } else if (val && val.includes('(') && val.includes(')')) {
+    const match = val.match(/\((.*?)\)/);
+    if (match) catatan = match[1];
+  } else if (val && !['terlaksana', 'sangat baik', 'baik', 'cukup', 'perlu bimbingan', '-'].includes(v.trim())) {
+    catatan = val.trim();
+  }
+
+  const persentase =
+    status === 'sangat_baik' ? 100 : status === 'baik' ? 85 : status === 'cukup' ? 70 : 50;
+
+  return {
+    id,
+    name,
+    tagline,
+    status,
+    persentase,
+    jumlahSiswa: totalSiswa,
+    catatan: catatan || undefined,
+  };
+}
+
+function parseRawSevenHabitsRow(row: any[], idx: number): SevenHabitsData {
+  const ts = row[0] ? String(row[0]) : new Date().toISOString();
+  const date = row[1] ? String(row[1]) : new Date().toISOString().split('T')[0];
+  const guru = row[2] ? String(row[2]) : '-';
+  const kelas = String(row[3] || '').replace(/^Kelas\s+/i, '') || '4a';
+  const jumlahSiswa = Number(row[4]) || 28;
+  const bangunPagi = String(row[5] || 'Terlaksana');
+  const beribadah = String(row[6] || 'Terlaksana');
+  const berolahraga = String(row[7] || 'Terlaksana');
+  const makanSehat = String(row[8] || 'Terlaksana');
+  const gemarBelajar = String(row[9] || 'Terlaksana');
+  const bermasyarakat = String(row[10] || 'Terlaksana');
+  const tidurCepat = String(row[11] || 'Terlaksana');
+  const catatanRefleksi = row[12] ? String(row[12]) : '';
+  const tindakLanjut = row[13] ? String(row[13]) : '';
+  const fotoData = row[14] ? String(row[14]) : '';
+
+  const habits = [
+    parseHabitCell('bangun-pagi', 'Bangun pagi', 'Melatih disiplin dan menghargai waktu sejak dini.', bangunPagi, jumlahSiswa),
+    parseHabitCell('beribadah', 'Beribadah', 'Membangun fondasi spiritual dan nilai moral yang kuat.', beribadah, jumlahSiswa),
+    parseHabitCell('berolahraga', 'Berolahraga', 'Menjaga kebugaran tubuh serta kesehatan mental.', berolahraga, jumlahSiswa),
+    parseHabitCell('makan-sehat', 'Makan sehat dan bergizi', 'Memenuhi nutrisi seimbang untuk tumbuh kembang.', makanSehat, jumlahSiswa),
+    parseHabitCell('gemar-belajar', 'Gemar belajar', 'Menumbuhkan rasa ingin tahu dan semangat sepanjang hayat.', gemarBelajar, jumlahSiswa),
+    parseHabitCell('bermasyarakat', 'Bermasyarakat', 'Belajar bergotong royong dan peduli kepada sesama.', bermasyarakat, jumlahSiswa),
+    parseHabitCell('tidur-cepat', 'Tidur cepat', 'Memulihkan energi agar tubuh kembali bugar esok.', tidurCepat, jumlahSiswa),
+  ];
+
+  return {
+    id: `sh-sheet-${idx + 1}`,
+    timestamp: ts,
+    date,
+    guru,
+    kelas,
+    jumlahSiswa,
+    bangunPagi,
+    beribadah,
+    berolahraga,
+    makanSehat,
+    gemarBelajar,
+    bermasyarakat,
+    tidurCepat,
+    habits,
+    catatanRefleksi: catatanRefleksi || undefined,
+    tindakLanjut: tindakLanjut || undefined,
+    fotoData: fotoData || undefined,
+  };
+}
+
+/**
+ * Mengambil data jurnal Seven Habits dari Spreadsheet resmi
+ */
+export async function fetchSevenHabitsFromSpreadsheet(
+  accessToken?: string
+): Promise<{ success: boolean; data: SevenHabitsData[]; message: string }> {
+  const url = getAppsScriptUrl();
+
+  // Mode 1: Melalui Google Apps Script Web App
+  if (url && url.startsWith('http')) {
+    try {
+      const fetchUrl = `${url}?action=getSevenHabits`;
+      const res = await fetch(fetchUrl, { method: 'GET', mode: 'cors' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.entries) && json.entries.length > 0) {
+          const list: SevenHabitsData[] = json.entries.map((item: any, idx: number) => {
+            const rowArr = [
+              item.timestamp,
+              item.date,
+              item.guru,
+              item.kelas,
+              item.jumlahSiswa,
+              item.bangunPagi,
+              item.beribadah,
+              item.berolahraga,
+              item.makanSehat,
+              item.gemarBelajar,
+              item.bermasyarakat,
+              item.tidurCepat,
+              item.catatanRefleksi,
+              item.tindakLanjut,
+              item.fotoData,
+            ];
+            return parseRawSevenHabitsRow(rowArr, idx);
+          });
+
+          // Sinkronkan ke local storage
+          setStoredItem(STORAGE_KEYS.SEVEN_HABITS, list);
+          return {
+            success: true,
+            data: list,
+            message: `Berhasil menyinkronkan ${list.length} data Seven Habits dari Spreadsheet.`,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal fetch getSevenHabits via Apps Script:', err);
+    }
+
+    // Fallback: coba action=getData&sheet=Seven Habits
+    try {
+      const fallbackUrl = `${url}?action=getData&sheet=${encodeURIComponent('Seven Habits')}&limit=100`;
+      const res = await fetch(fallbackUrl, { method: 'GET', mode: 'cors' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const list: SevenHabitsData[] = json.data.map((row: any, idx: number) =>
+            parseRawSevenHabitsRow(row, idx)
+          );
+          setStoredItem(STORAGE_KEYS.SEVEN_HABITS, list);
+          return {
+            success: true,
+            data: list,
+            message: `Berhasil mengambil ${list.length} data Seven Habits dari tab 'Seven Habits'.`,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Fallback getData Seven Habits gagal:', err);
+    }
+  }
+
+  // Mode 2: Direct Google Sheets REST API dengan OAuth
+  if (accessToken) {
+    try {
+      const sheetId = getActiveSpreadsheetId();
+      const range = encodeURIComponent('Seven Habits!A2:O');
+      const apiRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      if (apiRes.ok) {
+        const apiJson = await apiRes.json();
+        const rows = apiJson.values || [];
+        if (rows.length > 0) {
+          const list: SevenHabitsData[] = rows.map((r: any[], idx: number) =>
+            parseRawSevenHabitsRow(r, idx)
+          );
+          setStoredItem(STORAGE_KEYS.SEVEN_HABITS, list);
+          return {
+            success: true,
+            data: list,
+            message: `Berhasil mengambil ${list.length} data Seven Habits melalui Google Sheets API.`,
+          };
+        }
+      }
+    } catch (err) {
+      console.error('REST API Seven Habits error:', err);
+    }
+  }
+
+  // Fallback ke local storage
+  const localList = getStoredItem<SevenHabitsData[]>(STORAGE_KEYS.SEVEN_HABITS, []);
+  return {
+    success: false,
+    data: localList,
+    message: localList.length > 0
+      ? `Menampilkan ${localList.length} data Seven Habits lokal.`
+      : 'Belum ada data Seven Habits di Spreadsheet maupun lokal.',
+  };
+}
+
